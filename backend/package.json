@@ -1,0 +1,13 @@
+{
+  "name": "cecibot-backend",
+  "version": "0.0.0",
+  "description": "Backend for cecibot",
+  "main": "index.js",
+  "repository": "https://github.com/boramalper/cecibot",
+  "author": "Mert Bora ALPER",
+  "license": "ISC",
+  "dependencies": {
+    "puppeteer": "^1.1.1",
+    "redis": "^2.8.0"
+  }
+}
