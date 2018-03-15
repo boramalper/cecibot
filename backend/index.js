@@ -11,7 +11,7 @@ const puppeteer = require("puppeteer")
 let notInterrupted = true;
 
 (async () => {
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({args: ["--no-sandbox", "--disable-setuid-sandbox"]});
     const client  = redis.createClient();
 
     const brpop = promisify(client.brpop).bind(client);
