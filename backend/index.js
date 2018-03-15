@@ -11,11 +11,13 @@ const puppeteer = require("puppeteer")
 let notInterrupted = true;
 
 (async () => {
-    const browser = await puppeteer.launch({args: ["--no-sandbox", "--disable-setuid-sandbox"]});
-    const client  = redis.createClient();
+    const browser = await puppeteer.launch({args: ["--no-sandbox", "--disable-setuid-sandbox"]})
+        , client  = redis.createClient()
+        ;
 
-    const brpop = promisify(client.brpop).bind(client);
-    const lpush = promisify(client.lpush).bind(client);
+    const brpop = promisify(client.brpop).bind(client)
+        , lpush = promisify(client.lpush).bind(client)
+        ;
 
     client.on("error", function (err) {
         console.log("node_redis error: " + err);
@@ -35,11 +37,12 @@ let notInterrupted = true;
         }
 
         lpush(request.medium + "Responses", JSON.stringify({
-            respondedOn: Math.trunc(Date.now() / 1000),
-            type: "file",
-            fileName: fileName,
+            respondedOn  : Math.trunc(Date.now() / 1000),  // UNIX Time (seconds)
+            type         : "file",
+            fileName     : fileName,
             fileExtension: ".pdf",
-            opaque: request.opaque,
+            fileMIME     : "application/pdf",
+            opaque       : request.opaque,
         }));
     }
 

@@ -91,7 +91,9 @@ function loop(bot, client) {
             ;
 
         console.log("sending `" + filePath + "`");
-        bot.sendDocument(response.opaque.chatId, fileStream);
+        bot.sendDocument(response.opaque.chatId, fileStream, {}, {
+            contentType: response.fileMIME,
+        });
         fs.unlink(filePath);
 
         loop(bot, client);
@@ -100,7 +102,7 @@ function loop(bot, client) {
 
 
 function linksIn(msg) {
-    const links = []
+    const links    = []
         , entities = msg.entities
         ;
 

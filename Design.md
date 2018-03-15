@@ -30,7 +30,10 @@
         "type"         : "file",                           // `file` or `text` or `hypertext`.
         "fileName"     : "3d0738a4421f3c4be882068ca422a8a1",
         "fileExtension": ".pdf",
-        "opaque": {  // opaque is meant for the frontend, just pass
+        "fileMIME"     : "application/pdf",
+        // opaque is meant for the frontend, pass it in the response just as it
+        // is provided in the request
+        "opaque": {
         	"chatID": 1212121,  // For Telegram
         }
     }
