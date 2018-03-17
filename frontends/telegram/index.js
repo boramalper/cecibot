@@ -15,9 +15,8 @@ let interrupted = false;
 
 (async () => {
     const bot    = new TelegramBot(token, {polling: true})
-        , client = redis.createClient()
-        , brpop = promisify(client.brpop).bind(client)
-        , lpush = promisify(client.lpush).bind(client)
+        , pub = redis.createClient()
+        , sub = redis.createClient()
         ;
 
     bot.on("polling_error", (error) => {
@@ -25,17 +24,14 @@ let interrupted = false;
         console.log(error);  // => 'EFATAL'
     });
 
-    client.on("error", function (err) {
-        console.log("node_redis error: " + err);
+    pub.on("error", function (err) {
+        console.log("pub error:", err);
     });
 
-    client.on("connect", function () {
-        console.log("node_redis connected!");
+    sub.on("error", function (err) {
+        console.log("sub error:", err);
     });
 
-    client.on("ready", function () {
-        console.log("node_redis ready!");
-    });
 
     // Listen for any kind of message. There are different kinds of
     // messages.
@@ -46,15 +42,13 @@ let interrupted = false;
         if (links.length === 1) {
             console.log("pushing request for", links[0]);
 
-            client.lpush("requests", JSON.stringify({
+            pub.publish("requests", JSON.stringify({
                 url   : links[0],
                 medium: "telegram",
                 opaque: {
                     "chatId": chatId,
                 },
-            }), function (err, res) {
-                console.log("pushed ", err, " ", res);
-            });
+            }));
 
             bot.sendMessage(chatId, "wait...");
         } else if (links.length > 1) {
@@ -64,57 +58,22 @@ let interrupted = false;
         }
     });
 
-    console.log("post bot-on");
+    sub.on("message", async function _ (channel, message) {
+        console.log("message:", channel, message);
 
-    while (!interrupted) {
-        console.log("awaiting my response...");
-        const [_, responseJSON] = await brpop("telegramResponses", 0);
-        console.log("GOT TR:", responseJSON);
-
-        const response = JSON.parse(responseJSON)
+        const response = JSON.parse(message)
             , filePath   = "/home/bora/labs/cecibot/" + response.fileName + response.fileExtension
             , fileStream = fs.createReadStream(filePath)
-            ;
+        ;
 
         bot.sendDocument(response.opaque.chatId, fileStream, {}, {
             contentType: response.fileMIME,
         });
         fs.unlink(filePath);
-    }
-})();
-
-
-function loop(bot, client) {
-    if (interrupted) {
-        return;
-    }
-
-    client.brpop("telegramResponses", 1, function (err, res) {
-        if (err === null && res === null) {  // timeout
-            loop(bot, client);
-            return;
-        }
-
-        if (err) {
-            console.log("BRPOP err ", err);
-            loop(bot, client);
-            return;
-        }
-
-        const response   = JSON.parse(res[1])
-            , filePath   = "/home/bora/labs/cecibot/" + response.fileName + response.fileExtension
-            , fileStream = fs.createReadStream(filePath)
-            ;
-
-        console.log("sending `" + filePath + "`");
-        bot.sendDocument(response.opaque.chatId, fileStream, {}, {
-            contentType: response.fileMIME,
-        });
-        fs.unlink(filePath);
-
-        loop(bot, client);
     });
-}
+
+    sub.subscribe("telegramResponses");
+})();
 
 
 function linksIn(msg) {

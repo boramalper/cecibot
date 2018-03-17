@@ -12,48 +12,45 @@ let notInterrupted = true;
 
 (async () => {
     const browser = await puppeteer.launch()
-        , client  = redis.createClient()
+        , sub     = redis.createClient()
+        , pub     = redis.createClient()
         ;
 
-    const brpop = promisify(client.brpop).bind(client)
-        , lpush = promisify(client.lpush).bind(client)
-        ;
-
-    client.on("error", function (err) {
-        console.log("node_redis error: " + err);
+    sub.on("error", function (err) {
+        console.log("sub (redis) error: " + err);
+    });
+    pub.on("error", function (err) {
+        console.log("pub (redis) error: " + err);
     });
 
-    while (notInterrupted) {
-        console.log("waiting for requests...");
-        const [_, requestJSON] = await brpop("requests", 0)
-            ,     request      = JSON.parse(requestJSON)
-            ;
-        console.log(request);
+    sub.on("message", async function _ (channel, message) {
+        console.log("sub channel " + channel + ": " + message);
+        const request = JSON.parse(message);
 
         const [page, visitError] = await visit(browser, request.url);
         if (visitError) {
             console.log("visit error: ", visitError);
-            continue;
+            return;
         }
         console.log("visited!");
 
         const pdfName = await getPDF(page);
         console.log("got PDF!!", pdfName);
 
-        await lpush(request.medium + "Responses", JSON.stringify({
-            respondedOn  : Math.trunc(Date.now() / 1000),  // UNIX Time (seconds)
-            type         : "file",
-            title        : await page.title(),
-            fileName     : pdfName,
+        pub.publish(request.medium + "Responses", JSON.stringify({
+            respondedOn: Math.trunc(Date.now() / 1000),  // UNIX Time (seconds)
+            type: "file",
+            title: await page.title(),
+            fileName: pdfName,
             fileExtension: ".pdf",
-            fileMIME     : "application/pdf",
-            opaque       : request.opaque,
+            fileMIME: "application/pdf",
+            opaque: request.opaque,
         }));
         console.log("pushed!\n");
         await page.close();
-    }
+    });
 
-    await browser.close();
+    sub.subscribe("requests");
 })();
 
 
