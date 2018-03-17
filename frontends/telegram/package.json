@@ -7,7 +7,6 @@
   "author": "Mert Bora ALPER",
   "license": "ISC",
   "dependencies": {
-    "ioredis": "^3.2.2",
     "node-telegram-bot-api": "^0.30.0",
     "redis": "^2.8.0"
   }

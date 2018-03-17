@@ -1,6 +1,8 @@
 "use strict";
 
-const fs = require("fs");
+const fs          = require("fs")
+    , {promisify} = require("util")
+    ;
 
 const redis       = require("redis")
     , TelegramBot = require("node-telegram-bot-api")
@@ -12,17 +14,15 @@ const {token} = require("./secrets");
 let interrupted = false;
 
 (async () => {
-    const bot    = new TelegramBot(token, {polling: true});
-    const client = redis.createClient();
+    const bot    = new TelegramBot(token, {polling: true})
+        , client = redis.createClient()
+        , brpop = promisify(client.brpop).bind(client)
+        , lpush = promisify(client.lpush).bind(client)
+        ;
 
     bot.on("polling_error", (error) => {
         console.log("polling error:" );
         console.log(error);  // => 'EFATAL'
-    });
-
-    bot.on("webhook_error", (error) => {
-        console.log("webhook error: ");  // => 'EPARSE'
-        console.log(error);
     });
 
     client.on("error", function (err) {
@@ -44,9 +44,9 @@ let interrupted = false;
         const links  = linksIn(msg);
 
         if (links.length === 1) {
-            console.log("pushing request for ", links[0]);
+            console.log("pushing request for", links[0]);
 
-            let res = client.lpush("requests", JSON.stringify({
+            client.lpush("requests", JSON.stringify({
                 url   : links[0],
                 medium: "telegram",
                 opaque: {
@@ -64,7 +64,23 @@ let interrupted = false;
         }
     });
 
-    loop(bot, client);
+    console.log("post bot-on");
+
+    while (!interrupted) {
+        console.log("awaiting my response...");
+        const [_, responseJSON] = await brpop("telegramResponses", 0);
+        console.log("GOT TR:", responseJSON);
+
+        const response = JSON.parse(responseJSON)
+            , filePath   = "/home/bora/labs/cecibot/" + response.fileName + response.fileExtension
+            , fileStream = fs.createReadStream(filePath)
+            ;
+
+        bot.sendDocument(response.opaque.chatId, fileStream, {}, {
+            contentType: response.fileMIME,
+        });
+        fs.unlink(filePath);
+    }
 })();
 
 

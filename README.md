@@ -1,15 +1,24 @@
 # cecibot
 
 ## Installation Instructions
-1. Install the latest 8.x LTS version of the *Node.js* as described on their website:
+1. Use [StevenBlack's hosts](https://github.com/StevenBlack/hosts) to block
+   adware & malware:
+
+       sudo wget https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts -O /etc/hosts
+       sudo ifdown --exclude=lo -a && sudo ifup --exclude=lo -a
+
+   * You should update your hosts file regularly (preferably every week, or at
+     least once a month), using the same commands.
+
+2. Install the latest 8.x LTS version of the *Node.js* as described on their website:
 
    https://nodejs.org/en/download/package-manager
 
-2. Install *yarn* as described on their website:
+3. Install *yarn* as described on their website:
 
    https://yarnpkg.com/en/docs/
 
-3. Install *redis* using [*chris-lea*s PPA](https://launchpad.net/~chris-lea/+archive/ubuntu/redis-server):
+4. Install *redis* using [*chris-lea*s PPA](https://launchpad.net/~chris-lea/+archive/ubuntu/redis-server):
 
        sudo add-apt-repository ppa:chris-lea/redis-server
        sudo apt-get update

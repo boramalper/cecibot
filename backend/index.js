@@ -4,14 +4,14 @@ const crypto      = require("crypto")
     , {promisify} = require("util")
     ;
 
-const puppeteer = require("puppeteer")
-    , redis     = require("redis")
+const puppeteer   = require("puppeteer")
+    , redis       = require("redis")
     ;
 
 let notInterrupted = true;
 
 (async () => {
-    const browser = await puppeteer.launch({args: ["--no-sandbox", "--disable-setuid-sandbox"]})
+    const browser = await puppeteer.launch()
         , client  = redis.createClient()
         ;
 
@@ -30,20 +30,27 @@ let notInterrupted = true;
             ;
         console.log(request);
 
-        const [fileName, error] = await getPDF(browser, request.url);
-        if (error) {
-            console.log("ERROR: ", error);
+        const [page, visitError] = await visit(browser, request.url);
+        if (visitError) {
+            console.log("visit error: ", visitError);
             continue;
         }
+        console.log("visited!");
 
-        lpush(request.medium + "Responses", JSON.stringify({
+        const pdfName = await getPDF(page);
+        console.log("got PDF!!", pdfName);
+
+        await lpush(request.medium + "Responses", JSON.stringify({
             respondedOn  : Math.trunc(Date.now() / 1000),  // UNIX Time (seconds)
             type         : "file",
-            fileName     : fileName,
+            title        : await page.title(),
+            fileName     : pdfName,
             fileExtension: ".pdf",
             fileMIME     : "application/pdf",
             opaque       : request.opaque,
         }));
+        console.log("pushed!\n");
+        await page.close();
     }
 
     await browser.close();
@@ -56,25 +63,7 @@ process.on("SIGINT", function() {
 });
 
 
-async function getJPG(browser, url) {
-    const page = await visit(browser, url);
-    const name = randomName();
-
-    await page.screenshot({
-        path: name + ".jpg",
-        fullPage: true,
-        quality: 70,
-    });
-
-    return name;
-}
-
-
-async function getPDF(browser, url) {
-    const [page, error] = await visit(browser, url);
-    if (error) {
-        return [null, error];
-    }
+async function getPDF(page) {
     const name = randomName();
 
     // Generates a PDF with "screen" media type.
@@ -87,16 +76,24 @@ async function getPDF(browser, url) {
         height: "1920px",
     });
 
-    return [name, null];
+    return name;
 }
+
 
 async function visit(browser, url) { // return a [page + goto, error]
     const page = await browser.newPage();
+    await page.setRequestInterception(true);
+    page.on("request", request => {
+        if (["document", "stylesheet", "image", "font"].includes(request.resourceType()))
+            request.continue();
+        else
+            request.abort();
+    });
 
     try {
         await page.goto(url, {
             // Maximum navigation time in milliseconds (* 1000).
-            timeout: 20 * 1000,
+            timeout: 5 * 1000,
             // Consider navigation to be finished when there are no more than 2 network connections for at least 500 ms.
             waitUntil: "networkidle2",
         });
