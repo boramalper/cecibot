@@ -65,12 +65,14 @@ async function getPDF(page) {
 
     // Generates a PDF with "screen" media type.
     await page.emulateMedia("screen");
+
+    let height = await page.evaluate(() => document.documentElement.scrollHeight);
+    console.log("height:", height);
+
     await page.pdf({
         path: name + ".pdf",
-        // Width & Height will be swapper because of the landscape (orientation)!
-        landscape: true,
         width: "1080px",
-        height: "1920px",
+        height: height+1 + "px",  // +1 to prevent the last empty page
     });
 
     return name;
