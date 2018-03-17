@@ -1,8 +1,6 @@
 "use strict";
 
-const fs          = require("fs")
-    , {promisify} = require("util")
-    ;
+const fs = require("fs");
 
 const redis       = require("redis")
     , TelegramBot = require("node-telegram-bot-api")
@@ -62,7 +60,7 @@ let interrupted = false;
         console.log("message:", channel, message);
 
         const response = JSON.parse(message)
-            , filePath   = "/home/bora/labs/cecibot/" + response.fileName + response.fileExtension
+            , filePath   = "/home/bora/labs/cecibot/" + response.fileName
             , fileStream = fs.createReadStream(filePath)
         ;
 
