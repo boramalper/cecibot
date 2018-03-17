@@ -1,7 +1,6 @@
 "use strict";
 
 const crypto      = require("crypto")
-    , {promisify} = require("util")
     ;
 
 const puppeteer   = require("puppeteer")
@@ -39,7 +38,6 @@ let notInterrupted = true;
 
         pub.publish(request.medium + "Responses", JSON.stringify({
             respondedOn: Math.trunc(Date.now() / 1000),  // UNIX Time (seconds)
-            type: "file",
             title: await page.title(),
             fileName: pdfName,
             fileExtension: ".pdf",
@@ -61,18 +59,15 @@ process.on("SIGINT", function() {
 
 
 async function getPDF(page) {
-    const name = randomName();
+    const name = randomName()
+        , height = await page.evaluate(() => document.documentElement.scrollHeight)
+        ;
 
-    // Generates a PDF with "screen" media type.
-    await page.emulateMedia("screen");
-
-    let height = await page.evaluate(() => document.documentElement.scrollHeight);
-    console.log("height:", height);
-
+    await page.emulateMedia("screen");  // Generates a PDF with "screen" media type.
     await page.pdf({
         path: name + ".pdf",
         width: "1080px",
-        height: height+1 + "px",  // +1 to prevent the last empty page
+        height: height + 32 + "px",  // + 32 to prevent the last empty page (safety margin)
     });
 
     return name;
