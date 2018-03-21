@@ -25,9 +25,10 @@
         "title"        : "Vikipedi: Özgür Ansiklopedi",    // <title> of the webpage.
         "respondedOn"  : 45677543,                         // UNIX Time.
         "completed"    : false,                            // Whether the page timed out or not.
-        "fileName"     : "3d0738a4421f3c4be882068ca422a8a1",
+        "filePath"     : "3d0738a4421f3c4be882068ca422a8a1",
         "fileExtension": ".pdf",
         "fileMIME"     : "application/pdf",
+        "fileSize"     : 16777216,
         // opaque is meant for the frontend, pass it in the response just as it
         // is provided in the request
         "opaque": {

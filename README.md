@@ -10,13 +10,15 @@
    * You should update your hosts file regularly (preferably every week, or at
      least once a month), using the same commands.
 
-2. Install the latest 8.x LTS version of the *Node.js* as described on their website:
+2. Install the latest version of Python 3:
 
-   https://nodejs.org/en/download/package-manager
+       sudo add-apt-repository ppa:deadsnakes/ppa
+       sudo apt-get update
+       sudo apt-get install python3.6 python3.6-dev
 
-3. Install *yarn* as described on their website:
+3. Install `pip`:
 
-   https://yarnpkg.com/en/docs/
+       wget https://bootstrap.pypa.io/get-pip.py -O - | python3.6 - --user
 
 4. Install *redis* using [*chris-lea*s PPA](https://launchpad.net/~chris-lea/+archive/ubuntu/redis-server):
 
@@ -27,8 +29,12 @@
 ### The Backend
 1. Install all the dependencies of the backend:
 
-       yarn install
+       python3.6 -m pip install --user pyppeteer redis requests
 
-   Beware that the [`puppeteer`](https://github.com/GoogleChrome/puppeteer)
-   dependency will also download a bundled version of Chromium; to skip it, see
-   [*Environment Variables*](https://github.com/GoogleChrome/puppeteer/blob/master/docs/api.md#environment-variables).
+
+### Frontends
+
+#### Telegram
+1. Install all the dependencies of the Telegram frontend:
+
+       python3.6 -m pip install --user redis python-telegram-bot
