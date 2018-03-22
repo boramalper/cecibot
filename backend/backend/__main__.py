@@ -4,8 +4,6 @@ import asyncio
 import uuid
 import urllib.parse as u_parse
 import json
-import time
-import math
 import os.path as o_path
 
 import pyppeteer
@@ -27,9 +25,6 @@ MAX_FILE_SIZE = 5 * 1024 * 1024
 # =============
 
 
-error = str
-
-
 async def main():
     browser = await pyppeteer.launch()
 
@@ -38,53 +33,27 @@ async def main():
 
     sub.subscribe("requests")
 
+    # Ignore (the very first) "subscribe" message
+    assert sub.get_message(timeout=None)["type"] == "subscribe"
+
+    print("cecibot-backend is ready for requests!")
+
     for requestMsg in sub.listen():
-        print(requestMsg)
-        if requestMsg["type"] == "subscribe":
-            continue
+        request = json.loads(requestMsg["data"])
 
-        request    = json.loads(requestMsg["data"])
-        print(request)
-
-        if isFile(request["url"]):
-            r = downloadFile(request["url"])
-            if type(r) is error:
-                print(r)
-                continue
-            else:
-                filePath, fileMIME = r
-
-            print("%s is downloaded at `%s`" % (request["url"], filePath))
-
+        try:
+            response = await processRequest(browser, request)
+        except:
             response = {
-                "title": None,
-                "respondedOn": math.trunc(time.time()),
-                # "completed"    : false,                            # Whether the page timed out or not.
-                "filePath": filePath,
-                "fileExtension": urlExtension(request["url"]),
-                "fileMIME": fileMIME,
-                "fileSize": o_path.getsize(filePath),
+                "kind": "error",
+
+                "error": {
+                    "message": "cecibot: internal error",
+                },
             }
-        else:
-            page = await visit(browser, request["url"])
-            if type(page) is error:
-                print(page)
-                continue
-            filePath = await getPDF(page)
-            print("%s is saved at `%s`" % (request["url"], filePath))
-            response = {
-                "title"        : await page.title(),
-                "respondedOn"  : math.trunc(time.time()),
-                # "completed"    : false,                            # Whether the page timed out or not.
-                "filePath"     : filePath,
-                "fileExtension": ".pdf",
-                "fileMIME"     : "application/pdf",
-                "fileSize"     : o_path.getsize(filePath),
-            }
-            await page.close()
 
         response["opaque"] = request["opaque"]
-        client.publish(request["medium"] + "Responses", json.dumps(response))
+        client.publish("{}Responses".format(request["medium"]), json.dumps(response))
 
     sub.unsubscribe()
     sub.close()
@@ -92,16 +61,73 @@ async def main():
     await browser.close()
 
 
-def downloadFile(url: str) -> Union[error, Tuple[str, str]]:
+async def processRequest(browser: p_browser.Browser, request: Dict[str, Any]) -> Dict[str, Any]:
+    if isFile(request["url"]):
+        try:
+            filePath, fileMIME = downloadFile(request["url"])
+        except Error as err:
+            response = {
+                "kind": "error",
+
+                "error": {
+                    "message": err.message,
+                },
+            }
+        else:
+            print("%s is downloaded at `%s`" % (request["url"], filePath))
+            response = {
+                "kind": "file",
+
+                "file": {
+                    "title": None,
+                    "path": filePath,
+                    "extension": urlExtension(request["url"]),
+                    "mime": fileMIME,
+                    "size": o_path.getsize(filePath),
+                },
+            }
+    else:
+        try:
+            page = await visit(browser, request["url"])
+        except Error as err:
+            response = {
+                "kind": "error",
+
+                "error": {
+                    "message": err.message,
+                },
+            }
+        else:
+            filePath = await getPDF(page)
+            print("%s is saved at `%s`" % (request["url"], filePath))
+
+            response = {
+                "kind": "file",
+
+                "file": {
+                    "title": await page.title(),
+                    "path": filePath,
+                    "extension": ".pdf",
+                    "mime": "application/pdf",
+                    "size": o_path.getsize(filePath),
+                },
+            }
+
+            await page.close()
+
+    return response
+
+
+def downloadFile(url: str) -> Tuple[str, str]:
     r = requests.get(url, stream=True)
     if r.status_code != 200:
-        return "failure! %d" % (r.status_code,)
+        raise Error("not 200 OK: {}", r.status_code)
 
     if "content-length" not in r.headers:
-        return "file size unknown!"
+        raise Error("file size unknown: \"content-length\" header is missing")
 
     if int(r.headers["content-length"]) > MAX_FILE_SIZE:
-        return "file is too big: %d bytes" % (r.headers["content-length"],)
+        raise Error("file is too big: {} bytes (> {} bytes of maximum allowed)", r.headers["content-length"], MAX_FILE_SIZE)
 
     filePath = o_path.join(DOWNLOAD_PATH, str(uuid.uuid4()) + urlExtension(url))
     with open(filePath, "wb") as f:
@@ -124,8 +150,10 @@ async def getPDF(page: p_page.Page) -> str:
     return filePath
 
 
-async def visit(browser: p_browser.Browser, url: str) -> Union[error, p_page.Page]:
+async def visit(browser: p_browser.Browser, url: str) -> p_page.Page:
     page = await browser.newPage()
+    await page.setJavaScriptEnabled(False)
+    await page.setExtraHTTPHeaders({"DNT": "1"})  # Do Not Track (DNT)
     await page.setRequestInterception(True)
 
     @page.on("request")
@@ -143,7 +171,11 @@ async def visit(browser: p_browser.Browser, url: str) -> Union[error, p_page.Pag
             "waitUntil": "networkidle2",
         })
     except p_errors.TimeoutError:
-        return "timeout!"
+        page.close()
+        raise Error("timeout")
+    except p_errors.PageError as exc:
+        page.close()
+        raise Error("navigation: {}", exc.args[0])  # e.g. "net::ERR_NAME_NOT_RESOLVED"
 
     return page
 
@@ -177,6 +209,20 @@ def isFile(url: str) -> bool:
 
     uext = urlExtension(url)
     return uext and uext not in pageExtensions
+
+
+class Error(Exception):
+    message   : str
+    debug_dict: Optional[Dict[str, Any]]
+
+    def __init__(self, fmt: str, *args: Any, debug_dict: Optional[Dict[str, Any]] = None):
+        super().__init__()
+        self.message    = fmt.format(*args)
+        self.debug_dict = debug_dict
+
+        if self.debug_dict is not None:
+            print("Error:")
+            print(debug_dict)
 
 
 if __name__ == "__main__":

@@ -41,24 +41,29 @@ def main():
 
     sub.subscribe("telegramResponses")
 
-    print("listening redis")
-    for requestMsg in sub.listen():
-        print(">>>", requestMsg)
-        if requestMsg["type"] != "message":
-            print("ignoring non-message...")
-            continue
-        request = json.loads(requestMsg["data"])
+    # Ignore (the very first) "subscribe" message
+    assert sub.get_message(timeout=None)["type"] == "subscribe"
 
-        bot.send_document(
-            chat_id             = request["opaque"]["chatId"],
-            document            = open(request["filePath"], mode="rb"),
-            filename            = str(request["title"]),
-            reply_to_message_id = request["opaque"]["messageId"]
-        )
+    print("cecibot-telegram is ready for responses!")
 
-        request["fileSize"]
+    for response_msg in sub.listen():
+        response = json.loads(response_msg["data"])
 
-        #os.unlink(request["filePath"])
+        if response["kind"] == "file":
+            bot.send_document(
+                chat_id             = response["opaque"]["chatId"],
+                document            = open(response["file"]["path"], mode="rb"),
+                filename            = str(response["file"]["title"]),
+                reply_to_message_id = response["opaque"]["messageId"]
+            )
+            # TODO
+            # os.unlink(request["filePath"])
+        elif response["kind"] == "error":
+            bot.send_message(
+                chat_id             = response["opaque"]["chatId"],
+                text                = "Error: {}".format(response["error"]["message"]),
+                reply_to_message_id = response["opaque"]["messageId"]
+             )
 
     sub.unsubscribe()
     sub.close()
@@ -82,20 +87,21 @@ def only(bot: telegram.Bot, update: telegram.Update):
         else:
             x = "telegramUserTimer:%d" % (update.effective_user.id,)
             print(x)
-            print(type(client.get(x)), client.get(x))
 
-            if client.get(x) == b"1":
-                update.message.reply_text("Cool down! %d seconds left..." % (client.ttl(x), ))
+            x_ttl = client.ttl(x)
+            if x_ttl > 0:
+                update.message.reply_text("Cool down! {} seconds left...".format(x_ttl))
                 return ONLY
 
             bot.send_chat_action(chat_id=update.message["chat"]["id"], action=telegram.ChatAction.TYPING)
 
             client.set(x, "1")
-            client.expire(x, 5)
+            client.expire(x, 10)
 
             client.publish("requests", json.dumps({
                 "url"   : links[0],
                 "medium": "telegram",
+
                 "opaque": {
                     "chatId"   : update.message["chat"]["id"],
                     "messageId": update.message["message_id"]
@@ -112,8 +118,8 @@ def cancel(bot, update):
     return t_ext.ConversationHandler.END
 
 
-def error(bot, update, error):
-    print("Update `%s` caused error: %s", update, error)
+def error(bot, update, err):
+    print("Update `%s` caused error: %s", update, err)
 
 
 def extract_links(msg: str, entities: typing.List[dict]) -> typing.List[str]:

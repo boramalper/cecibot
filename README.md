@@ -38,3 +38,14 @@
 1. Install all the dependencies of the Telegram frontend:
 
        python3.6 -m pip install --user redis python-telegram-bot
+
+### The Web
+1. Install nginx:
+
+       sudo apt install nginx
+
+2. Install Certbot for Let's Encrypt and follow all of the instructions on their
+   website to get an HTTPS certificate for both `cecibot.com` and
+   `www.cecibot.com` with HTTP -> HTTPS redirection enabled for both:
+
+   https://certbot.eff.org/lets-encrypt/ubuntuxenial-nginx
