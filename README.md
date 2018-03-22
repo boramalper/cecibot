@@ -34,10 +34,15 @@
 
 ### Frontends
 
+#### E-Mail
+1. Install all the dependencies of the E-Mail frontend:
+
+       python3.6 -m pip install --user flask redis
+
 #### Telegram
 1. Install all the dependencies of the Telegram frontend:
 
-       python3.6 -m pip install --user redis python-telegram-bot
+       python3.6 -m pip install --user python-telegram-bot redis
 
 ### The Web
 1. Install nginx:
