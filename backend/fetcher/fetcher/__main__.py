@@ -16,12 +16,13 @@ import redis
 
 import requests
 
-
 # =============
 # CONFIGURATION
 # =============
 DOWNLOAD_PATH = "/tmp"
-MAX_FILE_SIZE = 5 * 1024 * 1024
+MAX_FILE_SIZE = 2 * 1024 * 1024
+
+
 # =============
 
 
@@ -29,7 +30,7 @@ async def main():
     browser = await pyppeteer.launch()
 
     client = redis.StrictRedis()
-    sub    = client.pubsub()
+    sub = client.pubsub()
 
     sub.subscribe("requests")
 
@@ -99,19 +100,30 @@ async def processRequest(browser: p_browser.Browser, request: Dict[str, Any]) ->
             }
         else:
             filePath = await getPDF(page)
-            print("%s is saved at `%s`" % (request["url"], filePath))
+            size = o_path.getsize(filePath)
 
-            response = {
-                "kind": "file",
+            if size > MAX_FILE_SIZE:
+                response = {
+                    "kind": "error",
 
-                "file": {
-                    "title": await page.title(),
-                    "path": filePath,
-                    "extension": ".pdf",
-                    "mime": "application/pdf",
-                    "size": o_path.getsize(filePath),
-                },
-            }
+                    "error": {
+                        "message": "file is too big: {} bytes (> {} bytes of maximum allowed)".format(size, MAX_FILE_SIZE)
+                    }
+                }
+            else:
+                print("%s is saved at `%s`" % (request["url"], filePath))
+
+                response = {
+                    "kind": "file",
+
+                    "file": {
+                        "title": await page.title(),
+                        "path": filePath,
+                        "extension": ".pdf",
+                        "mime": "application/pdf",
+                        "size": size,
+                    },
+                }
 
             await page.close()
 
@@ -127,7 +139,8 @@ def downloadFile(url: str) -> Tuple[str, str]:
         raise Error("file size unknown: \"content-length\" header is missing")
 
     if int(r.headers["content-length"]) > MAX_FILE_SIZE:
-        raise Error("file is too big: {} bytes (> {} bytes of maximum allowed)", r.headers["content-length"], MAX_FILE_SIZE)
+        raise Error("file is too big: {} bytes (> {} bytes of maximum allowed)", r.headers["content-length"],
+                    MAX_FILE_SIZE)
 
     filePath = o_path.join(DOWNLOAD_PATH, str(uuid.uuid4()) + urlExtension(url))
     with open(filePath, "wb") as f:
@@ -138,12 +151,12 @@ def downloadFile(url: str) -> Tuple[str, str]:
 
 async def getPDF(page: p_page.Page) -> str:
     filePath = o_path.join(DOWNLOAD_PATH, str(uuid.uuid4()) + ".pdf")
-    height   = await page.evaluate("document.documentElement.scrollHeight", force_expr=True)
+    height = await page.evaluate("document.documentElement.scrollHeight", force_expr=True)
 
     await page.emulateMedia("screen")
     await page.pdf({
-        "path"  : filePath,
-        "width" : "1080px",
+        "path": filePath,
+        "width": "1080px",
         "height": str(height + 32) + "px"  # + 32 to prevent the last empty page (safety margin)
     })
 
@@ -171,10 +184,10 @@ async def visit(browser: p_browser.Browser, url: str) -> p_page.Page:
             "waitUntil": "networkidle2",
         })
     except p_errors.TimeoutError:
-        page.close()
+        await page.close()
         raise Error("timeout")
     except p_errors.PageError as exc:
-        page.close()
+        await page.close()
         raise Error("navigation: {}", exc.args[0])  # e.g. "net::ERR_NAME_NOT_RESOLVED"
 
     return page
@@ -212,12 +225,12 @@ def isFile(url: str) -> bool:
 
 
 class Error(Exception):
-    message   : str
+    message: str
     debug_dict: Optional[Dict[str, Any]]
 
     def __init__(self, fmt: str, *args: Any, debug_dict: Optional[Dict[str, Any]] = None):
         super().__init__()
-        self.message    = fmt.format(*args)
+        self.message = fmt.format(*args)
         self.debug_dict = debug_dict
 
         if self.debug_dict is not None:

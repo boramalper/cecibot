@@ -26,11 +26,17 @@
        sudo apt-get update
        sudo apt-get install redis-server
 
-### The Backend
-1. Install all the dependencies of the backend:
+### Backend
+
+#### Fetcher
+1. Install all the dependencies of the fetcher:
 
        python3.6 -m pip install --user pyppeteer redis requests
 
+#### Monitor
+1. Install all the dependencies of the monitor:
+
+       python3.6 -m pip install --user redis
 
 ### Frontends
 

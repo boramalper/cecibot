@@ -1,0 +1,44 @@
+body {
+    width: 35em;
+    margin: 0 auto;
+    font-family: Tahoma, Verdana, Arial, sans-serif;
+    line-height: 1.4;
+    hyphens: auto;
+}
+
+h1 {
+    text-align: center;
+}
+
+h1 small {
+    font-size: small;
+    display: block;
+}
+
+p {
+    text-align: justify;
+}
+
+p.highlighted {
+    background-color: rgba(0, 0, 0, .2);
+    border-radius: 6px 6px 6px 6px;
+    padding: 10px 10px 10px 10px;
+}
+
+table td:nth-child(1) {
+    font-weight: bold;
+}
+
+table td:nth-child(2) {
+    /* https://stackoverflow.com/questions/38781089/font-family-monospace-monospace */
+    font-family: monospace, monospace;
+}
+
+footer {
+    margin-top: 1em;
+    border-top: 2px solid black;
+}
+
+div#languages {
+    text-align: center;
+}

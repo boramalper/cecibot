@@ -1,5 +1,8 @@
 # cecibot - Design
 
+- Files are saved at `~/.cecibot/dropbox/`
+- Request log is at `~/.cecibot/requests.sqlite3`
+
 ## redis
 
 - `requests` channel
