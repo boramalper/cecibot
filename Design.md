@@ -1,10 +1,20 @@
 # cecibot - Design
 
 - Files are saved at `~/.cecibot/dropbox/`
-- Request log is at `~/.cecibot/requests.sqlite3`
+- Request log is at `~/.cecibot/monitor/requests.sqlite3`
 
 ## redis
 
+### Keys
+- Programs must *prefix* the keys they create with their short name:
+  
+  __For instance:__
+  - `cecibot-email` -> `email.something`
+  - `cecibot-telegram` -> `telegram.something`
+  
+  and so on. See the documentation at the their directory for further details.
+
+### Channels
 - `requests` channel
   - Each message is JSON-encoded with the following schema:
 
@@ -17,6 +27,12 @@
         # is provided in the request
         "opaque"    : {
         	"chatID": 1212121  # For Telegram
+        }
+        
+        # identifier
+        "identifier": {
+            "chatID"  : 1212121,
+            "messageId: 8754
         }
     }
     ```
@@ -31,6 +47,7 @@
     ```
     {
         "kind": "file",
+        "url" : "https://tr.wikipedia.org/",
 
         "file": {
             "title"    : "Vikipedi: Özgür Ansiklopedi",
@@ -51,6 +68,7 @@
 
     {
         "kind"       : "error",
+        "url" : "https://tr.wikipedia.org/",
 
         "error": {
             "message": "error message here!"

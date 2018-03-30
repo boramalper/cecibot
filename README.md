@@ -1,7 +1,14 @@
 # cecibot
 
 ## Installation Instructions
-1. Use [StevenBlack's hosts](https://github.com/StevenBlack/hosts) to block
+1. Ensure that the following directories exist (if not, make them):
+
+       ~/.cecibot/monitor
+       ~/.cecibot/fetcher
+       ~/.cecibot/email
+       ~/.cecibot/telegram
+
+2. Use [StevenBlack's hosts](https://github.com/StevenBlack/hosts) to block
    adware & malware:
 
        sudo wget https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts -O /etc/hosts
@@ -10,17 +17,17 @@
    * You should update your hosts file regularly (preferably every week, or at
      least once a month), using the same commands.
 
-2. Install the latest version of Python 3:
+3. Install the latest version of Python 3:
 
        sudo add-apt-repository ppa:deadsnakes/ppa
        sudo apt-get update
        sudo apt-get install python3.6 python3.6-dev
 
-3. Install `pip`:
+4. Install `pip`:
 
        wget https://bootstrap.pypa.io/get-pip.py -O - | python3.6 - --user
 
-4. Install *redis* using [*chris-lea*s PPA](https://launchpad.net/~chris-lea/+archive/ubuntu/redis-server):
+5. Install *redis* using [*chris-lea*s PPA](https://launchpad.net/~chris-lea/+archive/ubuntu/redis-server):
 
        sudo add-apt-repository ppa:chris-lea/redis-server
        sudo apt-get update

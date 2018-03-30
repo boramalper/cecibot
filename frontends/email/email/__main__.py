@@ -7,18 +7,37 @@ from email.header import decode_header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
+import enum
 import threading
 import json
 import re
 import time
 import os
+import sys
+import textwrap
 
 import boto3
 
 import redis
 
+import address
+
+
+COOL_DOWN = 30  # cool-down period in seconds
+MAX_ATTEMPTS = 20
+
+
+@enum.unique
+class RateLimitingStatus(enum.Enum):
+    FREE = enum.auto()
+    RATE_LIMITED_NOW = enum.auto
+    RATE_LIMITED_AGAIN = enum.auto()
+    BLACKLISTED = enum.auto()
+
 
 def main():
+    # logging.basicConfig(format="%(asctime)s  %(message)s", level=logging.DEBUG)
+
     email_processor_thread = threading.Thread(target=email_processor, name="email_processor_thread")
     response_processor_thread = threading.Thread(target=response_processor, name="response_processor_thread")
 
@@ -38,55 +57,128 @@ def main():
 def email_processor() -> None:
     client = redis.StrictRedis()
 
+    ses = boto3.client("ses")
     sqs = boto3.resource("sqs")
     queue = sqs.get_queue_by_name(QueueName="cecibot-request-bot")  # type: boto3.sqs.Queue
 
     while True:
         # https://boto3.readthedocs.io/en/latest/reference/services/sqs.html?highlight=get_queue_by_name#SQS.Queue.receive_messages
-        messages = queue.receive_messages(WaitTimeSeconds=10)
-        if not messages:
-            print("no messages received in 20 seconds!")
+        sqs_messages = queue.receive_messages(WaitTimeSeconds=10)
+        if not sqs_messages:
+            print("no sqs_messages received in 20 seconds!")
             continue
 
-        for message in messages:
-            body = json.loads(message.body)
-            mail = Mail.from_string(json.loads(body["Message"])["content"])
+        mails = [
+            Mail.from_string(
+                json.loads(
+                    json.loads(sqs_msg.body)["Message"]
+                )["content"]
+            )
+            for sqs_msg in sqs_messages
+        ]
 
-            if mail.subject.startswith(("http://", "https://")):
-                url = mail.subject
-            else:
-                url = None
+        for sqs_msg in sqs_messages:
+            sqs_msg.delete()
 
-            print(mail.id_)
-            print("From   :", mail.from_)
-            print("Subject:", mail.subject)
-            print("URL:", url)
-            print("--------\n")
+        for mail in mails:
+            print(mail)
 
-            if url:
-                n_receivers = client.publish("requests", json.dumps({
-                    "url": mail.subject,
-                    "medium": "email",
+            rls = rate_limit(client, mail.from_[0])
+            if rls == RateLimitingStatus.RATE_LIMITED_NOW:
+                email_msg = compose_email(
+                    to=mail.from_[0],
+                    in_reply_to=mail.id_,
+                    subject="cecibot error: rate-limited",
+                    plaintext_message=textwrap.dedent("""\
+                    Your request
+                    
+                    \t{}
+                    
+                    has been unsuccessful due to rate-limiting. Please try again in {} seconds.
+                    
+                    Apologies for the inconvenience,
+                    cecibot.com
+                    """.format(mail.subject, COOL_DOWN))
+                )
 
-                    "opaque": {
-                        "to": mail.from_[0],
-                        "in_reply_to": mail.id_,
-                    },
+                response = ses.send_raw_email(
+                    Source="bot@cecibot.com",
+                    Destinations=[mail.from_[0]],
+                    RawMessage={"Data": email_msg.as_string()},
+                )
 
-                    "identifier": {
-                        "headers": mail.headers
-                    }
-                }))
+                if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
+                    print("send_raw_email HTTPStatusCode is not 200! {}".format(
+                        response["ResponseMetadata"]["HTTPStatusCode"]))
+            elif rls != RateLimitingStatus.FREE:
+                continue
 
-                """
-                if n_receivers != 2:
-                    print("The request is received by other than 2 receivers!")
-                    print("This might be an indicator that the monitor (or the fetcher) is not working.")
-                    print("Exiting...")
-                    sys.exit()
-                """
+            if not mail.subject.startswith(("http://", "https://")):
+                continue
 
-            message.delete()
+            print("URL: %s" % (mail.subject,))
+
+            n_receivers = client.publish("requests", json.dumps({
+                "url": mail.subject,
+                "medium": "email",
+
+                "opaque": {
+                    "to": mail.from_[0],
+                    "in_reply_to": mail.id_,
+                },
+
+                "identifier_version": 1,
+                "identifier": {
+                    "headers": mail.headers
+                }
+            }))
+
+            if n_receivers != 2:
+                print("The request is received by other than 2 receivers!")
+                print("This might be an indicator that the monitor (or the fetcher) is not working.")
+                print("Exiting...")
+                sys.exit()
+
+
+def rate_limit(client: redis.StrictRedis, addr: str) -> RateLimitingStatus:
+    provider_known, counter_name = get_counter_name(addr)
+
+    ttl = client.ttl(counter_name)
+
+    # ttl == -1
+    # "The key exists but has no associated expire."
+    # Meaning, that the e-mail address/domain is blacklisted.
+    if ttl == -1:
+        return RateLimitingStatus.BLACKLISTED
+    # ttl == -2
+    # "The key does not exist."
+    # Meaning, that the e-mail address/domain is new.
+    elif ttl == -2:
+        client.setex(counter_name, COOL_DOWN, 0)
+        return RateLimitingStatus.FREE
+    # ttl >= 0
+    # Meaning, tha the e-mail address/domain is (or rather, should be) cooling down.
+    # Keep track of their *attempts* and if it exceeds a certain number, blacklist them.
+    elif ttl >= 0:
+        n_attempts = client.incr(counter_name)
+
+        if n_attempts >= MAX_ATTEMPTS:
+            client.set(counter_name, 0)
+            return RateLimitingStatus.BLACKLISTED
+        elif n_attempts == 1:
+            return RateLimitingStatus.RATE_LIMITED_NOW
+        else:
+            return RateLimitingStatus.RATE_LIMITED_AGAIN
+
+
+def get_counter_name(addr: str) -> Tuple[bool, str]:
+    local, domain = address.separate(addr)
+
+    rdomain = address.whitedict.get(domain)
+    if rdomain is None:
+        return False, "email.rate_limiting.counter.nolocal.({})".format(address.reversed_domain(domain))
+    else:
+        return True, "email.rate_limiting.counter.complete.({}).({})".format(rdomain, address.normalise_local(local))
 
 
 def response_processor() -> None:
@@ -106,8 +198,6 @@ def response_processor() -> None:
         response = json.loads(response_msg["data"])
 
         if response["kind"] == "file":
-            print("IRT", response["opaque"].get("in_reply_to"))
-
             email_msg = compose_email(
                 to=response["opaque"]["to"],
                 subject=response["file"]["title"],
@@ -128,6 +218,33 @@ def response_processor() -> None:
         elif response["kind"] == "error":
             print("RESPONSE ERROR!!!")
             print(response)
+
+            email_msg = compose_email(
+                to=response["opaque"]["to"],
+                in_reply_to=response["opaque"].get("in_reply_to"),
+                subject="cecibot error: {}".format(response["error"]["message"]),
+                plaintext_message=textwrap.dedent("""\
+                Your request
+    
+                \t{}
+    
+                has been unsuccessful due to following error:
+                
+                \t{}
+                  
+                Apologies for the inconvenience,
+                cecibot.com
+                """.format(response["url"], response["error"]["message"]))
+            )
+
+            response = ses.send_raw_email(
+                Source="bot@cecibot.com",
+                Destinations=[response["opaque"]["to"]],
+                RawMessage={"Data": email_msg.as_string()},
+            )
+
+            if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
+                print("send_raw_email HTTPStatusCode is not 200! {}".format(response["ResponseMetadata"]["HTTPStatusCode"]))
 
     sub.unsubscribe()
     sub.close()
@@ -201,11 +318,20 @@ class Mail:
         self = cls()
         msg = email.message_from_string(s, policy=email.policy.default)
 
-        self.id_ = msg.get("Message-ID")
+        self.id_ = str(msg.get("Message-ID"))
         self.from_ = self._get_from(msg)
         self.subject = self._get_subject(msg)
         self.body = self._get_body(msg)
         self.headers = {k: v for k, v in msg.items()}
+
+        NoneType = type(None)
+        assert isinstance(self.id_, (NoneType, str))
+        assert isinstance(self.from_[0], str)
+        assert isinstance(self.from_[1], (NoneType, str))
+        assert isinstance(self.subject, str)
+        assert isinstance(self.body, str)
+        assert isinstance(self.headers, dict)
+        assert all(isinstance(k, str) and isinstance(v, str) for k, v in self.headers.items())
 
         return self
 
@@ -249,6 +375,17 @@ class Mail:
                     raise Exception("two possible candidates!")
 
         return candidate
+
+    def __str__(self):
+        return textwrap.dedent("""\
+            ID     : {}
+            From   : {}<{}>
+            Subject: {}
+            
+            {}
+            <<<<<<<<<<<<<<<<<<<<
+            <<<<<<<<<<<<<<<<<<<<
+            """.format(self.id_, self.from_[1] if self.from_[1] else "", self.from_[0], self.subject, self.body))
 
 
 if __name__ == "__main__":
