@@ -5,6 +5,8 @@ import uuid
 import urllib.parse as u_parse
 import json
 import os.path as o_path
+import sys
+import traceback
 
 import pyppeteer
 import pyppeteer.browser as p_browser
@@ -16,6 +18,8 @@ import redis
 
 import requests
 
+from request_logger import RequestLogger
+
 # =============
 # CONFIGURATION
 # =============
@@ -24,8 +28,14 @@ MAX_FILE_SIZE = 2 * 1024 * 1024
 # =============
 
 
-async def main():
+async def main() -> int:
     browser = await pyppeteer.launch()
+
+    try:
+        request_logger = RequestLogger()
+    except:
+        traceback.print_exc()
+        return 1
 
     client = redis.StrictRedis()
     sub = client.pubsub()
@@ -41,8 +51,20 @@ async def main():
         request = json.loads(requestMsg["data"])
 
         try:
+            request_logger.log(
+                request["url"],
+                request["medium"],
+                int(request["identifier_version"]),
+                request["identifier"]
+            )
+        except:
+            traceback.print_exc()
+            return 1
+
+        try:
             response = await processRequest(browser, request)
         except:
+            traceback.print_exc()
             response = {
                 "kind": "error",
 
@@ -78,7 +100,7 @@ async def processRequest(browser: p_browser.Browser, request: Dict[str, Any]) ->
                 "kind": "file",
 
                 "file": {
-                    "title": None,
+                    "title": urlBasename(request["url"]),
                     "path": filePath,
                     "extension": urlExtension(request["url"]),
                     "mime": fileMIME,
@@ -168,7 +190,7 @@ async def visit(browser: p_browser.Browser, url: str) -> p_page.Page:
     await page.setRequestInterception(True)
 
     @page.on("request")
-    async def _(request: p_network_manager.Request):
+    async def _(request: p_network_manager.Request) -> None:
         if request.resourceType in ["document", "stylesheet", "image", "font"]:
             await request.continue_()
         else:
@@ -193,6 +215,10 @@ async def visit(browser: p_browser.Browser, url: str) -> p_page.Page:
 
 def urlExtension(url: str) -> str:
     return o_path.splitext(u_parse.urlparse(url).path)[1]
+
+
+def urlBasename(url: str) -> str:
+    return o_path.basename(u_parse.urlparse(url).path)
 
 
 def isFile(url: str) -> bool:
@@ -237,4 +263,4 @@ class Error(Exception):
 
 
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(main())
+    sys.exit(asyncio.get_event_loop().run_until_complete(main()))
