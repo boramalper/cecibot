@@ -29,7 +29,16 @@
         	"chatID": 1212121  # For Telegram
         }
         
-        # identifier
+        # identifier must contain all the necessary info to __uniquely identify__
+        #
+        # A. The Sender
+        # B. The Message
+        #
+        # of the request made, given a medium.
+        #
+        # Identifiers must supply a version number > 0 (again, tied to the medium;
+        # see `identifier_version`) to version the changes in their schema.
+        "identifier_version": 1,
         "identifier": {
             "chatID"  : 1212121,
             "messageId: 8754
