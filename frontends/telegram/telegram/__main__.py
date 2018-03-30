@@ -2,6 +2,7 @@ import enum
 import typing
 import json
 import sys
+import traceback
 
 import redis
 
@@ -12,8 +13,8 @@ import secret
 
 ONLY = 1
 
-COOL_DOWN = 1
-MAX_ATTEMPTS = 20
+COOL_DOWN = 15
+MAX_ATTEMPTS = 10
 
 
 @enum.unique
@@ -60,18 +61,18 @@ def main():
 
         if response["kind"] == "file":
             bot.send_document(
-                chat_id=response["opaque"]["chatId"],
+                chat_id=response["opaque"]["chat_id"],
                 document=open(response["file"]["path"], mode="rb"),
-                filename=str(response["file"]["title"]),
-                reply_to_message_id=response["opaque"]["messageId"]
+                filename=response["file"]["title"] + response["file"]["extension"],  # Undocumented...
+                reply_to_message_id=response["opaque"]["message_id"]
             )
             # TODO
             # os.unlink(request["filePath"])
         elif response["kind"] == "error":
             bot.send_message(
-                chat_id=response["opaque"]["chatId"],
-                text="Error: {}".format(response["error"]["message"]),
-                reply_to_message_id=response["opaque"]["messageId"]
+                chat_id=response["opaque"]["chat_id"],
+                text="cecibot error: {}".format(response["error"]["message"]),
+                reply_to_message_id=response["opaque"]["message_id"]
             )
 
     sub.unsubscribe()
@@ -87,55 +88,52 @@ def start(bot, update):
 def only(bot: telegram.Bot, update: telegram.Update):
     client = redis.StrictRedis()
 
-    #try:
-    links = extract_links(update.message.text, update.message.entities)
-    print("user said:", update.message.text)
-
-    rls = rate_limit(client, update.effective_user.id)
-    if rls == RateLimitingStatus.RATE_LIMITED_NOW:
-        update.message.reply_text("You are *rate-limited*! Wait {} seconds...".format(COOL_DOWN))
+    if update.message is None or update.message.from_user is None:
         return
-    elif rls != RateLimitingStatus.FREE:
-        return
+    message = update.message
 
-    if len(links) == 0:
-        update.message.reply_text("Send some links!", quote=True)
-    elif len(links) > 1:
-        update.message.reply_text("Send links one message at a time!", quote=True)
-    else:
-        x = "telegramUserTimer:%d" % (update.effective_user.id,)
-        print(x)
+    try:
+        rls = rate_limit(client, message.from_user.id)
+        if rls == RateLimitingStatus.RATE_LIMITED_NOW:
+            message.reply_text("You are trying too fast! Wait for {} seconds...".format(COOL_DOWN))
+            message.reply_text("I'll not say no more honey.")
+            return
+        elif rls != RateLimitingStatus.FREE:
+            return
 
-        bot.send_chat_action(chat_id=update.message["chat"]["id"], action=telegram.ChatAction.TYPING)
+        links = extract_links(message.text, message.entities)
 
-        n_receivers = client.publish("requests", json.dumps({
-            "url": links[0],
-            "medium": "telegram",
+        if len(links) == 0:
+            message.reply_text("Send some links!", quote=True)
+        elif len(links) > 1:
+            message.reply_text("Send links one message at a time!", quote=True)
+        else:
+            bot.send_chat_action(chat_id=message.chat.id, action=telegram.ChatAction.TYPING)
 
-            "opaque": {
-                "chatId": update.message["chat"]["id"],
-                "messageId": update.message["message_id"]
-            },
+            n_receivers = client.publish("requests", json.dumps({
+                "url": links[0],
+                "medium": "telegram",
 
-            "identifier_version": 1,
-            "identifier": {
-                "user_id": update.message["user"]["id"],
-                "chat_id": update.message["chat"]["id"],
-                "message_id": update.message["message_id"],
-            }
-        }))
+                "opaque": {
+                    "chat_id": message.chat.id,
+                    "message_id": message.message_id
+                },
 
-        if n_receivers != 2:
-            print("The request is received by other than 2 receivers!")
-            print("This might be an indicator that the monitor (or the fetcher) is not working.")
-            print("Exiting...")
-            sys.exit()
+                "identifier_version": 1,
+                "identifier": {
+                    "user_id": message.from_user.id,
+                    "chat_id": message.chat.id,
+                    "message_id": message.message_id,
+                }
+            }))
 
-    """
-    except Exception as e:
-        print("EEEE", e) # TODO
-        raise e
-    """
+            if n_receivers != 2:
+                print("The request is received by other than 2 receivers!")
+                print("This might be an indicator that the monitor (or the fetcher) is not working.")
+                print("Exiting...")
+                sys.exit()
+    except:
+        traceback.print_exc()
 
     return ONLY
 
@@ -187,6 +185,7 @@ def rate_limit(client: redis.StrictRedis, user_id: int) -> RateLimitingStatus:
             return RateLimitingStatus.RATE_LIMITED_NOW
         else:
             return RateLimitingStatus.RATE_LIMITED_AGAIN
+
 
 if __name__ == "__main__":
     main()
