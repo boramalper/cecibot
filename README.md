@@ -1,10 +1,31 @@
 # cecibot
 
 ## Installation Instructions
+1. Install Node.js and [PM2](https://pm2.keymetrics.io/):
+
+       # Install Node.js
+       curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
+       sudo apt-get install -y nodejs build-essential
+       
+       # Install PM2
+       sudo npm install pm2@latest -g
+       
+2. Configure PM2:
+
+       # Ensure that PM2 will be restarted on reboot
+       pm2 startup
+       
+       # Link PM2 to [Keymetrics]
+       pm2 link <KEYMETRICS_SECRET> <KEYMETRICS_PUBLIC>
+       
+3. Install [redis-stat](https://github.com/junegunn/redis-stat):
+
+       sudo apt-get install -y ruby-all-dev
+       sudo gem install redis-stat
+
 1. Ensure that the following directories exist (if not, make them):
 
-       ~/.cecibot/monitor
-       ~/.cecibot/fetcher
+       ~/.cecibot/backend
        ~/.cecibot/email
        ~/.cecibot/telegram
 
@@ -21,7 +42,7 @@
 
        sudo add-apt-repository ppa:deadsnakes/ppa
        sudo apt-get update
-       sudo apt-get install python3.6 python3.6-dev
+       sudo apt-get install -y python3.6 python3.6-dev
 
 4. Install `pip`:
 
@@ -31,26 +52,30 @@
 
        sudo add-apt-repository ppa:chris-lea/redis-server
        sudo apt-get update
-       sudo apt-get install redis-server
+       sudo apt-get install -y redis-server
 
-### Backend
-
-#### Fetcher
-1. Install all the dependencies of the fetcher:
+### The Backend
+1. Install all the dependencies of the backend:
 
        python3.6 -m pip install --user pyppeteer redis requests
-
-#### Monitor
-1. Install all the dependencies of the monitor:
-
-       python3.6 -m pip install --user redis
 
 ### Frontends
 
 #### E-Mail
 1. Install all the dependencies of the E-Mail frontend:
 
-       python3.6 -m pip install --user flask redis
+       python3.6 -m pip install --user flask redis boto3
+       
+2. Save your [AWS](https://aws.amazon.com/) credentials at `~/.aws/credentials`:
+
+       [default]
+       aws_access_key_id=YOUR_ACCESS_KEY
+       aws_secret_access_key=YOUR_SECRET_KEY
+
+3. Set the default AWS region at `~/.aws/config`:
+
+       [default]
+       region=eu-west-1
 
 #### Telegram
 1. Install all the dependencies of the Telegram frontend:

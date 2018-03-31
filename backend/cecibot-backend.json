@@ -1,0 +1,11 @@
+{
+  "apps" : [{
+    "name"        : "cecibot-backend",
+    "script"      : "./backend/",
+    "interpreter" : "/usr/bin/python3.6",
+    "instances"   : 1,
+    "watch"       : false,
+    "max_memory_restart": "30M",
+    "log_date_format": ""
+  }]
+}

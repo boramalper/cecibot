@@ -1,6 +1,7 @@
 from typing import *
 
 import asyncio
+import logging
 import uuid
 import urllib.parse as u_parse
 import json
@@ -29,7 +30,7 @@ MAX_FILE_SIZE = 2 * 1024 * 1024
 
 
 async def main() -> int:
-    browser = await pyppeteer.launch()
+    logging.basicConfig(format="%(asctime)s  %(levelname)s\t%(message)s", level=logging.INFO)
 
     try:
         request_logger = RequestLogger()
@@ -38,48 +39,44 @@ async def main() -> int:
         return 1
 
     client = redis.StrictRedis()
-    sub = client.pubsub()
+    browser = await pyppeteer.launch()
 
-    sub.subscribe("requests")
+    logging.info("cecibot-backend is ready for requests!")
 
-    # Ignore (the very first) "subscribe" message
-    assert sub.get_message(timeout=None)["type"] == "subscribe"
+    try:
+        while True:
+            request = json.loads(client.brpop("requests")[1])
 
-    print("cecibot-backend is ready for requests!")
+            try:
+                request_logger.log(
+                    request["url"],
+                    request["medium"],
+                    int(request["identifier_version"]),
+                    request["identifier"]
+                )
+            except:
+                traceback.print_exc()
+                break
 
-    for requestMsg in sub.listen():
-        request = json.loads(requestMsg["data"])
+            try:
+                response = await processRequest(browser, request)
+            except:
+                traceback.print_exc()
+                response = {
+                    "kind": "error",
 
-        try:
-            request_logger.log(
-                request["url"],
-                request["medium"],
-                int(request["identifier_version"]),
-                request["identifier"]
-            )
-        except:
-            traceback.print_exc()
-            return 1
+                    "error": {
+                        "message": "cecibot: internal error",
+                    },
+                }
 
-        try:
-            response = await processRequest(browser, request)
-        except:
-            traceback.print_exc()
-            response = {
-                "kind": "error",
-
-                "error": {
-                    "message": "cecibot: internal error",
-                },
-            }
-
-        response["opaque"] = request["opaque"]
-        client.publish("{}Responses".format(request["medium"]), json.dumps(response))
-
-    sub.unsubscribe()
-    sub.close()
-
-    await browser.close()
+            response["opaque"] = request["opaque"]
+            client.lpush("{}_responses".format(request["medium"]), json.dumps(response))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        await browser.close()
+        return 0
 
 
 async def processRequest(browser: p_browser.Browser, request: Dict[str, Any]) -> Dict[str, Any]:
@@ -95,7 +92,6 @@ async def processRequest(browser: p_browser.Browser, request: Dict[str, Any]) ->
                 },
             }
         else:
-            print("%s is downloaded at `%s`" % (request["url"], filePath))
             response = {
                 "kind": "file",
 
@@ -131,8 +127,6 @@ async def processRequest(browser: p_browser.Browser, request: Dict[str, Any]) ->
                     }
                 }
             else:
-                print("%s is saved at `%s`" % (request["url"], filePath))
-
                 response = {
                     "kind": "file",
 
@@ -258,8 +252,7 @@ class Error(Exception):
         self.debug_dict = debug_dict
 
         if self.debug_dict is not None:
-            print("Error:")
-            print(debug_dict)
+            logging.debug("Error.debug_dict", debug_dict)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+{
+  "apps" : [{
+    "name"        : "cecibot-telegram",
+    "script"      : "./telegram/",
+    "interpreter" : "/usr/bin/python3.6",
+    "instances"   : 1,
+    "watch"       : false,
+    "max_memory_restart": "30M",
+    "log_date_format": "",
+    "env": {
+      "NODE_ENV": "development"
+    }
+  }]
+}

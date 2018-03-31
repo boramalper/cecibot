@@ -1,5 +1,3 @@
-from typing import *
-
 import datetime
 import logging
 import sqlite3
@@ -13,7 +11,7 @@ now = datetime.datetime.utcnow()
 # CONFIGURATION
 # =============
 MAX_BUFF_SIZE = 20
-DATABASE_PATH = os.path.expanduser("~/.cecibot/monitor/requests_{YEAR}-{MONTH}.sqlite3".format(YEAR=now.year, MONTH=now.month))
+DATABASE_PATH = os.path.expanduser("~/.cecibot/backend/requests_{YEAR}-{MONTH}.sqlite3".format(YEAR=now.year, MONTH=now.month))
 # =============
 
 
@@ -65,7 +63,7 @@ class RequestLogger:
                           -- id is just an integer primary key:
                             id                 INTEGER NOT NULL PRIMARY KEY
 
-                          -- The UNIX Time request is received __by the monitor__: 
+                          -- The UNIX Time request is received __by the backend__: 
                           , received_on        INTEGER NOT NULL CHECK (received_on >= {}) DEFAULT (cast(strftime('%s', 'now') as int))
 
                           -- The requested URL

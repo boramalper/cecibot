@@ -1,11 +1,9 @@
-from typing import *
-
 import enum
 import threading
 import json
 import time
 import os
-import sys
+import logging
 import textwrap
 
 import boto3
@@ -29,7 +27,7 @@ class RateLimitingStatus(enum.Enum):
 
 
 def main():
-    # logging.basicConfig(format="%(asctime)s  %(message)s", level=logging.DEBUG)
+    logging.basicConfig(format="%(asctime)s  %(levelname)s\t%(message)s", level=logging.INFO)
 
     email_processor_thread = threading.Thread(target=email_processor, name="email_processor_thread")
     response_processor_thread = threading.Thread(target=response_processor, name="response_processor_thread")
@@ -56,9 +54,9 @@ def email_processor() -> None:
 
     while True:
         # https://boto3.readthedocs.io/en/latest/reference/services/sqs.html?highlight=get_queue_by_name#SQS.Queue.receive_messages
-        sqs_messages = queue.receive_messages(WaitTimeSeconds=10)
+        sqs_messages = queue.receive_messages(WaitTimeSeconds=20)
         if not sqs_messages:
-            print("no sqs_messages received in 20 seconds!")
+            logging.debug("No SQS messages received in the past 20 seconds!")
             continue
 
         mails = [
@@ -74,8 +72,6 @@ def email_processor() -> None:
             sqs_msg.delete()
 
         for mail in mails:
-            print(mail)
-
             rls = rate_limit(client, mail.from_[0])
             if rls == RateLimitingStatus.RATE_LIMITED_NOW:
                 email2.send(ses, mail.from_[0], email2.compose(
@@ -99,7 +95,7 @@ def email_processor() -> None:
             if not mail.subject.startswith(("http://", "https://")):
                 continue
 
-            n_receivers = client.publish("requests", json.dumps({
+            client.lpush("requests", json.dumps({
                 "url": mail.subject,
                 "medium": "email",
 
@@ -113,12 +109,6 @@ def email_processor() -> None:
                     "headers": mail.headers
                 }
             }))
-
-            if n_receivers != 2:
-                print("The request is received by other than 2 receivers!")
-                print("This might be an indicator that the monitor (or the fetcher) is not working.")
-                print("Exiting...")
-                sys.exit()
 
 
 def rate_limit(client: redis.StrictRedis, addr: str) -> RateLimitingStatus:
@@ -166,28 +156,14 @@ def response_processor() -> None:
     ses = boto3.client("ses")
 
     client = redis.StrictRedis()
-    sub = client.pubsub()
 
-    sub.subscribe("emailResponses")
+    logging.info("cecibot-email is ready for responses!")
 
-    # Ignore (the very first) "subscribe" message
-    assert sub.get_message(timeout=None)["type"] == "subscribe"
+    while True:
+        response = json.loads(client.brpop("email_responses")[1])
 
-    print("cecibot-email is ready for responses!")
-
-    for response_msg in sub.listen():
-        response = json.loads(response_msg["data"])
-
-        if response["kind"] == "file":
-            email_msg = email2.compose(
-                to=response["opaque"]["to"],
-                subject=response["file"]["title"],
-                attachment_path=response["file"]["path"],
-                in_reply_to=response["opaque"].get("in_reply_to"),
-            )
-            os.unlink(response["file"]["path"])
-        elif response["kind"] == "error":
-            email_msg = email2.compose(
+        if response["kind"] == "error":
+            email2.send(ses, response["opaque"]["to"], email2.compose(
                 to=response["opaque"]["to"],
                 in_reply_to=response["opaque"].get("in_reply_to"),
                 subject="cecibot error: {}".format(response["error"]["message"]),
@@ -203,14 +179,17 @@ def response_processor() -> None:
                 Apologies for the inconvenience,
                 cecibot.com
                 """.format(response["url"], response["error"]["message"]))
-            )
-        else:
-            sys.exit("the kind of the response is neither file nor error: {}".format(response["kind"]))
+            ))
+            continue
 
-        email2.send(ses, response["opaque"]["to"], email_msg)
-
-    sub.unsubscribe()
-    sub.close()
+        # If not error, send the file (kind == file)
+        email2.send(ses, response["opaque"]["to"], email2.compose(
+            to=response["opaque"]["to"],
+            subject=response["file"]["title"],
+            attachment_path=response["file"]["path"],
+            in_reply_to=response["opaque"].get("in_reply_to"),
+        ))
+        os.unlink(response["file"]["path"])
 
 
 if __name__ == "__main__":

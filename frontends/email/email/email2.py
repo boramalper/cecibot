@@ -7,6 +7,7 @@ from email.header import decode_header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
+import logging
 import re
 import textwrap
 
@@ -157,4 +158,4 @@ def send(ses, destination: str, message: MIMEMultipart, source: str = "bot@cecib
     )
 
     if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
-        print("send_raw_email HTTPStatusCode is not 200! {}".format(response["ResponseMetadata"]["HTTPStatusCode"]))
+        logging.debug("send_raw_email HTTPStatusCode is not 200! {}".format(response["ResponseMetadata"]["HTTPStatusCode"]))
