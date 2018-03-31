@@ -83,9 +83,9 @@ def email_processor() -> None:
                     
                     \t{}
                     
-                    has been unsuccessful due to rate-limiting. Please try again in {} seconds.
+                    has failed due to rate-limiting. Please try again in {} seconds.
                     
-                    Apologies for the inconvenience,
+                    ___________
                     cecibot.com
                     """.format(mail.subject, COOL_DOWN))
                 ))
@@ -93,7 +93,24 @@ def email_processor() -> None:
                 continue
 
             if not mail.subject.startswith(("http://", "https://")):
-                continue
+                email2.send(ses, mail.from_[0], email2.compose(
+                    to=mail.from_[0],
+                    in_reply_to=mail.id_,
+                    subject="cecibot error: subject is not a URL",
+                    plaintext_message=textwrap.dedent("""\
+                    Your request
+                    
+                    \t{}
+                    
+                    has failed since the request (subject line) seems not to be a URL.
+                    
+                    Bear in mind that a URL must start with a protocol (i.e. `http://`
+                    or `https://`, which are currently the only protocols we support).
+                    
+                    ___________
+                    cecibot.com 
+                    """)
+                ))
 
             client.lpush("requests", json.dumps({
                 "url": mail.subject,
@@ -176,7 +193,7 @@ def response_processor() -> None:
                 
                 \t{}
                   
-                Apologies for the inconvenience,
+                ___________
                 cecibot.com
                 """.format(response["url"], response["error"]["message"]))
             ))

@@ -3,6 +3,8 @@ from typing import *
 import enum
 import logging
 import json
+import os
+import textwrap
 import traceback
 
 import redis
@@ -10,14 +12,9 @@ import redis
 import telegram
 import telegram.ext as t_ext
 
-import secret
-
 # conf
 COOL_DOWN = 15
 MAX_ATTEMPTS = 10
-
-
-ONLY = 1
 
 
 @enum.unique
@@ -29,16 +26,15 @@ class RateLimitingStatus(enum.Enum):
 
 
 def start_telegram_updater():
-    updater = t_ext.Updater(secret.token)
+    updater = t_ext.Updater(os.environ["CECIBOT_TELEGRAM_SECRET"])
     updater.dispatcher.add_handler(t_ext.ConversationHandler(
         entry_points=[
             t_ext.CommandHandler("start", start),
             t_ext.MessageHandler(t_ext.Filters.text, only)
         ],
-        states={
-            ONLY: [t_ext.MessageHandler(t_ext.Filters.text, only)],
-        },
-        fallbacks=[t_ext.CommandHandler("cancel", cancel)],
+        allow_reentry=True,
+        states={},
+        fallbacks=[],
     ))
 
     updater.dispatcher.add_error_handler(error)
@@ -47,9 +43,11 @@ def start_telegram_updater():
 
 
 def start(bot, update):
-    update.message.reply_text("Welcome to the cecibot!")
-
-    return ONLY
+    update.message.reply_text(textwrap.dedent("""\
+    Welcome to the cecibot!
+    Any message that contains a (single!) URL will be considered a request, and the referenced file/web-page will be sent back to you.
+    See https://cecibot.com/ for details.
+    """))
 
 
 def only(bot: telegram.Bot, update: telegram.Update):
@@ -63,7 +61,6 @@ def only(bot: telegram.Bot, update: telegram.Update):
         rls = rate_limit(client, message.from_user.id)
         if rls == RateLimitingStatus.RATE_LIMITED_NOW:
             message.reply_text("You are trying too fast! Wait for {} seconds...".format(COOL_DOWN))
-            message.reply_text("I'll not say no more honey.")
             return
         elif rls != RateLimitingStatus.FREE:
             return
@@ -73,7 +70,7 @@ def only(bot: telegram.Bot, update: telegram.Update):
         if len(links) == 0:
             message.reply_text("Send some links!", quote=True)
         elif len(links) > 1:
-            message.reply_text("Send links one message at a time!", quote=True)
+            message.reply_text("Send one link per message!", quote=True)
         else:
             bot.send_chat_action(chat_id=message.chat.id, action=telegram.ChatAction.TYPING)
 
@@ -95,13 +92,6 @@ def only(bot: telegram.Bot, update: telegram.Update):
             }))
     except:
         traceback.print_exc()
-
-    return ONLY
-
-
-def cancel(bot, update):
-    update.message.reply_text("Sad to see you go!")
-    return t_ext.ConversationHandler.END
 
 
 def error(bot, update, err):

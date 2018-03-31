@@ -10,6 +10,10 @@ h1 {
     text-align: center;
 }
 
+h1 sup {
+    font-size: x-small;
+}
+
 h1 small {
     font-size: small;
     display: block;

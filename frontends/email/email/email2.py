@@ -152,7 +152,7 @@ def compose(to: str, *, subject: Optional[str] = None, plaintext_message: Option
 
 def send(ses, destination: str, message: MIMEMultipart, source: str = "bot@cecibot.com") -> None:
     response = ses.send_raw_email(
-        Source="bot@cecibot.com",
+        Source=source,
         Destinations=[destination],
         RawMessage={"Data": message.as_string()},
     )

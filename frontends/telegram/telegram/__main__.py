@@ -6,7 +6,6 @@ import redis
 
 import telegram
 
-import secret
 from updater import start_telegram_updater
 
 
@@ -15,7 +14,7 @@ def main():
 
     start_telegram_updater()
 
-    bot = telegram.Bot(token=secret.token)
+    bot = telegram.Bot(token=os.environ["CECIBOT_TELEGRAM_SECRET"])
     client = redis.StrictRedis()
 
     logging.info("cecibot-telegram is ready for responses!")

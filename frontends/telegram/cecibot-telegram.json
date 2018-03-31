@@ -8,7 +8,7 @@
     "max_memory_restart": "30M",
     "log_date_format": "",
     "env": {
-      "NODE_ENV": "development"
+      "CECIBOT_TELEGRAM_SECRET": "..."
     }
   }]
 }

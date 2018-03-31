@@ -66,17 +66,19 @@ async def main() -> int:
                     "kind": "error",
 
                     "error": {
-                        "message": "cecibot: internal error",
+                        "message": "internal error",
                     },
                 }
 
             response["opaque"] = request["opaque"]
             client.lpush("{}_responses".format(request["medium"]), json.dumps(response))
     except KeyboardInterrupt:
-        pass
+        return 0
+    except:
+        traceback.print_exc()
+        return 1
     finally:
         await browser.close()
-        return 0
 
 
 async def processRequest(browser: p_browser.Browser, request: Dict[str, Any]) -> Dict[str, Any]:
