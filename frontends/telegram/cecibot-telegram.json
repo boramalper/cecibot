@@ -3,6 +3,7 @@
     "name"        : "cecibot-telegram",
     "script"      : "./frontends/telegram/telegram/",
     "interpreter" : "/usr/bin/python3.6",
+    "exec_mode"   : "fork",
     "instances"   : 1,
     "watch"       : false,
     "max_memory_restart": "30M",
