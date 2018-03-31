@@ -1,7 +1,7 @@
 {
   "apps" : [{
     "name"        : "cecibot-telegram",
-    "script"      : "./telegram/",
+    "script"      : "./frontends/telegram/telegram/",
     "interpreter" : "/usr/bin/python3.6",
     "instances"   : 1,
     "watch"       : false,
