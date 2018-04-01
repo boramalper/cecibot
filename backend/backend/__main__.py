@@ -71,6 +71,7 @@ async def main() -> int:
                 }
 
             response["opaque"] = request["opaque"]
+            response["url"] = request["url"]
             client.lpush("{}_responses".format(request["medium"]), json.dumps(response))
     except KeyboardInterrupt:
         return 0

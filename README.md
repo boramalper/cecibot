@@ -57,6 +57,11 @@
 ### The Backend
 1. Install all the dependencies of the backend:
 
+       # Dependencies of Chromium
+       sudo apt-get install libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1\
+         libxi6 libxtst6 libnss3 libcups2 libxss1 libxrandr2 libasound2\
+         libpangocairo-1.0-0 libatk1.0-0 libatk-bridge2.0-0 libgtk-3-0
+       
        python3.6 -m pip install --user pyppeteer redis requests
 
 ### Frontends
@@ -92,3 +97,11 @@
    `www.cecibot.com` with HTTP -> HTTPS redirection enabled for both:
 
    https://certbot.eff.org/lets-encrypt/ubuntuxenial-nginx
+
+### Running
+
+1. redis-stat 
+
+       redis-stat --server=63790 --daemon
+
+

@@ -109,7 +109,7 @@ def email_processor() -> None:
                     
                     ___________
                     cecibot.com 
-                    """)
+                    """.format(mail.subject))
                 ))
 
             client.lpush("requests", json.dumps({
