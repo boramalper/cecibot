@@ -69,27 +69,37 @@ def only(bot: telegram.Bot, update: telegram.Update):
 
         if len(links) == 0:
             message.reply_text("Send some links!", quote=True)
-        elif len(links) > 1:
+            return
+
+        if len(links) > 1:
             message.reply_text("Send one link per message!", quote=True)
-        else:
-            bot.send_chat_action(chat_id=message.chat.id, action=telegram.ChatAction.TYPING)
+            return
 
-            client.lpush("requests", json.dumps({
-                "url": links[0],
-                "medium": "telegram",
+        if not links[0].startswith(("http://", "https://")):
+            message.reply_text(
+                "A URL must start with a protocol (i.e. `http://` or `https://`, which are currently the only "
+                "protocols we support)."
+            )
+            return
 
-                "opaque": {
-                    "chat_id": message.chat.id,
-                    "message_id": message.message_id
-                },
+        bot.send_chat_action(chat_id=message.chat.id, action=telegram.ChatAction.TYPING)
 
-                "identifier_version": 1,
-                "identifier": {
-                    "user_id": message.from_user.id,
-                    "chat_id": message.chat.id,
-                    "message_id": message.message_id,
-                }
-            }))
+        client.lpush("requests", json.dumps({
+            "url": links[0],
+            "medium": "telegram",
+
+            "opaque": {
+                "chat_id": message.chat.id,
+                "message_id": message.message_id
+            },
+
+            "identifier_version": 1,
+            "identifier": {
+                "user_id": message.from_user.id,
+                "chat_id": message.chat.id,
+                "message_id": message.message_id,
+            }
+        }))
     except:
         traceback.print_exc()
 
