@@ -3,6 +3,8 @@ import logging
 import sqlite3
 import os.path
 import time
+import traceback
+import sys
 
 
 now = datetime.datetime.utcnow()
@@ -10,7 +12,7 @@ now = datetime.datetime.utcnow()
 # =============
 # CONFIGURATION
 # =============
-MAX_BUFF_SIZE = 20
+MAX_BUFF_SIZE = 1
 DATABASE_PATH = os.path.expanduser("~/.cecibot/backend/requests_{YEAR}-{MONTH}.sqlite3".format(YEAR=now.year, MONTH=now.month))
 # =============
 
@@ -29,10 +31,21 @@ class RequestLogger:
             self._flush()
 
     def _flush(self) -> None:
-        self._conn.executemany(
-            "INSERT INTO request (url, medium, identifier_version, identifier) VALUES (?, ?, ?, ?);",
-            self._buff
-        )
+        for e in self._buff:
+            try:
+                self._conn.execute(
+                    "INSERT INTO request (url, medium, identifier_version, identifier) VALUES (?, ?, ?, ?);",
+                    e
+                )
+            except sqlite3.InterfaceError:
+                print("INTERFACE ERROR:", file=sys.stderr)
+                print("url    {}   {}".format(type(e[0]), e[0]), file=sys.stderr)
+                print("medium {}   {}".format(type(e[1]), e[1]), file=sys.stderr)
+                print("id_ver {}   {}".format(type(e[2]), e[2]), file=sys.stderr)
+                print("id     {}   {}".format(type(e[3]), e[3]), file=sys.stderr)
+                traceback.print_exc()
+
+        self._buff = []
 
     @classmethod
     def _setup_database(cls, path: str) -> sqlite3.Connection:

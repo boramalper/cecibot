@@ -60,6 +60,14 @@ async def main() -> int:
 
             try:
                 response = await processRequest(browser, request)
+            except Error as err:
+                response = {
+                    "kind": "error",
+
+                    "error": {
+                        "message": err.message,
+                    },
+                }
             except:
                 traceback.print_exc()
                 response = {
@@ -84,65 +92,45 @@ async def main() -> int:
 
 async def processRequest(browser: p_browser.Browser, request: Dict[str, Any]) -> Dict[str, Any]:
     if isFile(request["url"]):
-        try:
-            filePath, fileMIME = downloadFile(request["url"])
-        except Error as err:
+        filePath, fileMIME = downloadFile(request["url"])
+        response = {
+            "kind": "file",
+
+            "file": {
+                "title": urlBasename(request["url"]),
+                "path": filePath,
+                "extension": urlExtension(request["url"]),
+                "mime": fileMIME,
+                "size": o_path.getsize(filePath),
+            },
+        }
+    else:
+        page = await visit(browser, request["url"])
+        filePath = await getPDF(page)
+        size = o_path.getsize(filePath)
+
+        if size > MAX_FILE_SIZE:
             response = {
                 "kind": "error",
 
                 "error": {
-                    "message": err.message,
-                },
+                    "message": "file is too big: {} bytes (> {} bytes of maximum allowed)".format(size, MAX_FILE_SIZE)
+                }
             }
         else:
             response = {
                 "kind": "file",
 
                 "file": {
-                    "title": urlBasename(request["url"]),
+                    "title": await page.title(),
                     "path": filePath,
-                    "extension": urlExtension(request["url"]),
-                    "mime": fileMIME,
-                    "size": o_path.getsize(filePath),
+                    "extension": ".pdf",
+                    "mime": "application/pdf",
+                    "size": size,
                 },
             }
-    else:
-        try:
-            page = await visit(browser, request["url"])
-        except Error as err:
-            response = {
-                "kind": "error",
 
-                "error": {
-                    "message": err.message,
-                },
-            }
-        else:
-            filePath = await getPDF(page)
-            size = o_path.getsize(filePath)
-
-            if size > MAX_FILE_SIZE:
-                response = {
-                    "kind": "error",
-
-                    "error": {
-                        "message": "file is too big: {} bytes (> {} bytes of maximum allowed)".format(size, MAX_FILE_SIZE)
-                    }
-                }
-            else:
-                response = {
-                    "kind": "file",
-
-                    "file": {
-                        "title": await page.title(),
-                        "path": filePath,
-                        "extension": ".pdf",
-                        "mime": "application/pdf",
-                        "size": size,
-                    },
-                }
-
-            await page.close()
+        await page.close()
 
     return response
 
@@ -168,7 +156,31 @@ def downloadFile(url: str) -> Tuple[str, str]:
 
 async def getPDF(page: p_page.Page) -> str:
     filePath = o_path.join(DOWNLOAD_PATH, str(uuid.uuid4()) + ".pdf")
-    height = await page.evaluate("document.documentElement.scrollHeight", force_expr=True)
+
+    try:
+        """
+        You are not alone:
+        
+        > At the risk of spamming, I'm going to post this again, so we can stay on top of the actual issue:
+        >
+        > The underlying problem is that there is a race condition between the event that clears execution contexts and
+        > the event that adds new execution contexts.
+        >
+        > When you navigate to a new page, sometimes headless chrome will add the new contexts, before clearing the old
+        > ones. When it goes to clear the contexts, it blows away the recently added context, causing: Cannot find
+        > context with specified id undefined.
+        >
+        > I think the fix should come from upstream, since I think it's going to be quite difficult to handle correctly
+        > in puppeteer.
+        https://github.com/GoogleChrome/puppeteer/issues/1325#issuecomment-366254084
+
+        Also: https://github.com/boramalper/cecibot/issues/2
+        """
+        height = await page.evaluate("document.documentElement.scrollHeight", force_expr=True)
+    except pyppeteer.errors.NetworkError:
+        # Even though the PDF we are creating is no longer full-height (i.e. has a height equal to the height of the
+        # web-page), we can still create a PDF instead of failing.
+        height = 1920
 
     await page.emulateMedia("screen")
     await page.pdf({
@@ -249,13 +261,15 @@ class Error(Exception):
     message: str
     debug_dict: Optional[Dict[str, Any]]
 
-    def __init__(self, fmt: str, *args: Any, debug_dict: Optional[Dict[str, Any]] = None):
+    def __init__(self, fmt: str, *args: Any, **debug_dict: Optional[Dict[str, Any]]):
         super().__init__()
         self.message = fmt.format(*args)
         self.debug_dict = debug_dict
 
-        if self.debug_dict is not None:
-            logging.debug("Error.debug_dict", debug_dict)
+        if self.debug_dict:
+            logging.debug("Debugging Info:")
+            for k, v in debug_dict.items():
+                logging.debug("{}\t{}".format(k, v))
 
 
 if __name__ == "__main__":
