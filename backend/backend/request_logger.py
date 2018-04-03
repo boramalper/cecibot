@@ -1,5 +1,8 @@
+from typing import *
+
 import datetime
 import logging
+import json
 import sqlite3
 import os.path
 import time
@@ -22,29 +25,19 @@ class RequestLogger:
 
     def __init__(self, path: str = DATABASE_PATH) -> None:
         self._conn = self._setup_database(path)
-        self._buff = []
+        self._buff = []  # type: List[Tuple[str, str, int, str]]
 
-    def log(self, url: str, medium: str, identifier_version: int, identifier: str) -> None:
-        self._buff.append((url, medium, identifier_version, identifier))
+    def log(self, url: str, medium: str, identifier_version: int, identifier: dict) -> None:
+        self._buff.append((url, medium, identifier_version, json.dumps(identifier)))
 
         if len(self._buff) >= MAX_BUFF_SIZE:
             self._flush()
 
     def _flush(self) -> None:
-        for e in self._buff:
-            try:
-                self._conn.execute(
-                    "INSERT INTO request (url, medium, identifier_version, identifier) VALUES (?, ?, ?, ?);",
-                    e
-                )
-            except sqlite3.InterfaceError:
-                print("INTERFACE ERROR:", file=sys.stderr)
-                print("url    {}   {}".format(type(e[0]), e[0]), file=sys.stderr)
-                print("medium {}   {}".format(type(e[1]), e[1]), file=sys.stderr)
-                print("id_ver {}   {}".format(type(e[2]), e[2]), file=sys.stderr)
-                print("id     {}   {}".format(type(e[3]), e[3]), file=sys.stderr)
-                traceback.print_exc()
-
+        self._conn.executemany(
+            "INSERT INTO request (url, medium, identifier_version, identifier) VALUES (?, ?, ?, ?);",
+            self._buff
+        )
         self._buff = []
 
     @classmethod
