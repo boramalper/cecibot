@@ -22,6 +22,10 @@
 
        sudo apt-get install -y ruby-all-dev
        sudo gem install redis-stat
+       
+1. Install fonts for Chinese characters:
+
+       sudo apt-get install -y fonts-wqy-zenhei ttf-wqy-microhei
 
 1. Ensure that the following directories exist (if not, make them):
 
