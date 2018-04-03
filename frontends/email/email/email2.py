@@ -57,8 +57,8 @@ class Mail:
         m = r.findall(msg["from"])[0]
         if m[0] and m[1]:
             return m[1], m[0]
-        elif m[3]:
-            return m[3], None
+        elif m[2]:
+            return m[2], None
         else:
             raise Exception("from couldn't be parsed!")
 
