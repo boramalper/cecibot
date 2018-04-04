@@ -5,6 +5,7 @@ import time
 import os
 import logging
 import textwrap
+import traceback
 
 import boto3
 
@@ -59,17 +60,21 @@ def email_processor() -> None:
             logging.debug("No SQS messages received in the past 20 seconds!")
             continue
 
-        mails = [
-            email2.Mail.from_string(
-                json.loads(
-                    json.loads(sqs_msg.body)["Message"]
-                )["content"]
-            )
-            for sqs_msg in sqs_messages
-        ]
-
+        mails = []
         for sqs_msg in sqs_messages:
-            sqs_msg.delete()
+            try:
+                mail = email2.Mail.from_string(
+                    json.loads(
+                        json.loads(sqs_msg.body)["Message"]
+                    )["content"]
+                )
+            except:
+                traceback.print_exc()
+                continue
+            finally:
+                sqs_msg.delete()
+
+            mails.append(mail)
 
         for mail in mails:
             rls = rate_limit(client, mail.from_[0])
