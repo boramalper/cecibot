@@ -6,6 +6,7 @@ import os
 import logging
 import textwrap
 import traceback
+import sys
 
 import boto3
 
@@ -27,7 +28,7 @@ class RateLimitingStatus(enum.Enum):
     BLACKLISTED = enum.auto()
 
 
-def main():
+def main() -> int:
     logging.basicConfig(format="%(asctime)s  %(levelname)s\t%(message)s", level=logging.INFO)
 
     email_processor_thread = threading.Thread(target=email_processor, name="email_processor_thread")
@@ -44,6 +45,8 @@ def main():
 
     email_processor_thread.join()
     response_processor_thread.join()
+
+    return os.EX_OK
 
 
 def email_processor() -> None:
@@ -215,4 +218,9 @@ def response_processor() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        sys.exit(main())
+    except:
+        print("UNCAUGHT EXCEPTION!")
+        traceback.print_exc()
+        sys.exit(os.EX_SOFTWARE)

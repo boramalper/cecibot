@@ -9,6 +9,7 @@ import os.path as o_path
 import sys
 import traceback
 
+import os
 import pyppeteer
 import pyppeteer.browser as p_browser
 import pyppeteer.errors as p_errors
@@ -47,16 +48,12 @@ async def main() -> int:
         while True:
             request = json.loads(client.brpop("requests")[1])
 
-            try:
-                request_logger.log(
-                    request["url"],
-                    request["medium"],
-                    int(request["identifier_version"]),
-                    request["identifier"]
-                )
-            except:
-                traceback.print_exc()
-                break
+            request_logger.log(
+                request["url"],
+                request["medium"],
+                int(request["identifier_version"]),
+                request["identifier"]
+            )
 
             try:
                 response = await processRequest(browser, request)
@@ -68,24 +65,12 @@ async def main() -> int:
                         "message": err.message,
                     },
                 }
-            except:
-                traceback.print_exc()
-                response = {
-                    "kind": "error",
-
-                    "error": {
-                        "message": "internal error",
-                    },
-                }
 
             response["opaque"] = request["opaque"]
             response["url"] = request["url"]
             client.lpush("{}_responses".format(request["medium"]), json.dumps(response))
     except KeyboardInterrupt:
         return 0
-    except:
-        traceback.print_exc()
-        return 1
     finally:
         await browser.close()
 
@@ -273,4 +258,10 @@ class Error(Exception):
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.get_event_loop().run_until_complete(main()))
+    try:
+        sys.exit(asyncio.get_event_loop().run_until_complete(main()))
+    except:
+        print("UNCAUGHT EXCEPTION!")
+        traceback.print_exc()
+        sys.exit(os.EX_SOFTWARE)
+
