@@ -121,7 +121,10 @@ async def processRequest(browser: p_browser.Browser, request: Dict[str, Any]) ->
 
 
 def downloadFile(url: str) -> Tuple[str, str]:
-    r = requests.get(url, stream=True)
+    try:
+        r = requests.get(url, stream=True)
+    except requests.exceptions.InvalidURL:
+        raise Error("invalid URL!")
     if r.status_code != 200:
         raise Error("not 200 OK: {}", r.status_code)
 
