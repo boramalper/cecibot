@@ -58,6 +58,11 @@
        sudo apt-get update
        sudo apt-get install -y redis-server
 
+6. Symlink `web/` in nginx
+
+       sudo rm -rf html/
+       sudo ln -s ~/cecibot/web/ ./html
+
 ### The Backend
 1. Install all the dependencies of the backend:
 
