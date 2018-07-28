@@ -23,7 +23,7 @@ MAX_ATTEMPTS = 20
 @enum.unique
 class RateLimitingStatus(enum.Enum):
     FREE = enum.auto()
-    RATE_LIMITED_NOW = enum.auto
+    RATE_LIMITED_NOW = enum.auto()
     RATE_LIMITED_AGAIN = enum.auto()
     BLACKLISTED = enum.auto()
 
